@@ -6,48 +6,44 @@ from policy import Policy
 
 class Policy2310393(Policy):
     def __init__(self):
-        self.stock_width = 10
-        self.stock_height = 10
-        self.starting_cut_patterns = None  # Placeholder for initial patterns
+        self.stock_width = 20
+        self.stock_height = 20
+        self.initial_pattern = None
         self.required_quantities = None
 
     def get_action(self, observation, info):
         items = observation["products"]
-        stockpile = observation["stocks"]
+        stocks = observation["stocks"]
 
-        self._prepare_data_(items)
-
-        # Solve with column generation
-        cut_solution = self._process_column_generation_(stockpile)
-
-        # Choose an action based on the solution
-        move = self._determine_action_(stockpile, cut_solution)
-        return move
-
-    def _prepare_data_(self, items):
+        # Initialize item data
         self.required_quantities = np.array([prod["quantity"] for prod in items])
         self.item_dimensions = np.array([prod["size"] for prod in items])
-
-        # Create trivial patterns for initialization
         total_items = len(self.item_dimensions)
-        self.starting_cut_patterns = np.eye(total_items, dtype = int)
+        self.initial_pattern = np.eye(total_items, dtype = int)
 
-    def _process_column_generation_(self, stockpile):
+        # Column generation
+        cut_solution = self.column_generation(stocks)
+
+        # Choose an action
+        move = self.select_action(stocks, cut_solution)
+        return move
+
+    def column_generation(self, stocks):
         is_new_pattern = True
-        next_pattern = None
-        active_patterns = self.starting_cut_patterns
+        new_pattern = None
+        active_patterns = self.initial_pattern
 
         while is_new_pattern:
-            if next_pattern is not None:
-                active_patterns = np.column_stack((active_patterns, next_pattern))
+            if new_pattern is not None:
+                active_patterns = np.column_stack((active_patterns, new_pattern))
 
-            dual_values = self._solve_lp_relaxation_(active_patterns)
-            is_new_pattern, next_pattern = self._find_new_pattern_(dual_values, stockpile)
+            dual_values = self.solve_lp(active_patterns)
+            is_new_pattern, new_pattern = self.find_new_pattern(dual_values, stocks)
 
-        optimal_stock_count, optimal_solution = self._solve_ip_master_(active_patterns)
+        optimal_stock_count, optimal_solution = self.solve_ip(active_patterns)
         return {"cut_patterns": active_patterns, "minimal_stock": optimal_stock_count, "optimal_numbers": optimal_solution}
 
-    def _solve_lp_relaxation_(self, active_patterns):
+    def solve_lp(self, active_patterns):
         model = grb.Model()
         model.setParam('OutputFlag', 0)
         allocation_vars = model.addMVar(shape = active_patterns.shape[1], lb = 0, vtype = GRB.CONTINUOUS)
@@ -56,7 +52,7 @@ class Policy2310393(Policy):
         model.optimize()
         return np.array(model.getAttr("Pi", model.getConstrs()))
 
-    def _solve_ip_master_(self, active_patterns):
+    def solve_ip(self, active_patterns):
         model = grb.Model()
         model.setParam('OutputFlag', 0)
         allocation_vars = model.addMVar(shape = active_patterns.shape[1], lb = 0, vtype = GRB.INTEGER)
@@ -65,7 +61,7 @@ class Policy2310393(Policy):
         model.optimize()
         return model.objVal, np.array(model.getAttr("X"))
 
-    def _find_new_pattern_(self, dual_values, stockpile):
+    def find_new_pattern(self, dual_values, stocks):
         model = grb.Model()
         model.setParam('OutputFlag', 0)
         decision_vars = model.addMVar(shape = len(self.item_dimensions), lb = 0, vtype = GRB.INTEGER)
@@ -81,7 +77,7 @@ class Policy2310393(Policy):
         else:
             return False, None
 
-    def _determine_action_(self, stockpile, cut_solution):
+    def select_action(self, stockpile, cut_solution):
         stock_idx = 0
         while stock_idx < len(stockpile):
             stock = stockpile[stock_idx]
@@ -92,12 +88,10 @@ class Policy2310393(Policy):
                         if prod_count > 0:
                             prod_dim = self.item_dimensions[prod_idx]
                             if stock_w >= prod_dim[0] and stock_h >= prod_dim[1]:
-                                attempts = 0
-                                while attempts < 100:
-                                    x_pos = random.randint(0, stock_w - prod_dim[0])
-                                    y_pos = random.randint(0, stock_h - prod_dim[1])
-                                    if self._can_place_(stock, (x_pos, y_pos), prod_dim):
-                                        return {"stock_idx": stock_idx, "size": prod_dim, "position": (x_pos, y_pos)}
-                                    attempts += 1
+                                # First-fit
+                                for x_pos in range(stock_w - prod_dim[0] + 1):
+                                    for y_pos in range(stock_h - prod_dim[1] + 1):
+                                        if self._can_place_(stock, (x_pos, y_pos), prod_dim):
+                                            return {"stock_idx": stock_idx, "size": prod_dim, "position": (x_pos, y_pos)}
             stock_idx += 1
         return {"stock_idx": -1, "size": (0, 0), "position": (0, 0)}
