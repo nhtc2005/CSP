@@ -1,0 +1,19 @@
+SUMMARIZED RESULTS OF OUR POLICY
+
+The implemented algorithm has shown quite good results in solving the two-dimensional 
+cutting stock problem, effectively generating cutting patterns to fulfill product 
+requirements. However, some limitations have been identified:
+
+1. Stock utilization:
+    -   While the policy effectively minimizes stock usage, it does not optimize stock 
+        area utilization as efficiently as tools like optiCutter, especially when the 
+        option to rotate materials is not considered.
+
+2. Handling varied stock sizes:
+    -   The current implementation does not give efficient solution when initial stocks 
+        have different sizes.
+
+3. Future direction: To improve the algorithm's performance, future work should focus on:
+    -   Enhancing the program to consider rotation of raw materials for better fitting 
+        and increased stock utilization.
+    -   Handling varied stock sizes.

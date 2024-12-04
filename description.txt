@@ -1,0 +1,27 @@
+DESCRIPTION OF OUR POLICY
+
+Our code implements a 2D cutting stock strategy using column generation. The main 
+objective is to minimize material usage while fulfilling the product requirements.
+
+Key Features and Components:
+1. __init__:
+    -   Initializes stock_width and stock_height.
+    -   Sets upInitialize initial_cut_patterns (basic patterns) and required_quantities.
+
+2. get_action:
+    -   Determines the best cutting action based on the current stock and product 
+        requirements.
+    -   Actions include selecting the stock piece and defining the position and 
+        size of the cut.
+
+3. Column Generation Workflow:
+    -   Prepares data using _prepare_data_
+    -   Iteratively finds better cutting patterns by:
+        + Solving a linear programming (LP) problem to evaluate existing patterns.
+        + Identifying new patterns that can improve the solution.
+    -   Solves the master problem of column generation using _solve_ip_problem.
+
+4. Action determination: _determine_action_
+    -   Selects the stock and cutting position based on the solution.
+    -   Ensures that cuts fit within the stock dimensions and meet the product size 
+        requirements.

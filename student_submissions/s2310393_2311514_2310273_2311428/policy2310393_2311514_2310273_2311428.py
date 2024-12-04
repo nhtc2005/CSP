@@ -1,103 +1,90 @@
-import random
 import numpy as np
 from scipy.optimize import linprog
 from policy import Policy
 
-class Policy2310393(Policy):
-    def __init__(self):
-        self.stock_width = 25
-        self.stock_height = 25
-        self.starting_cut_patterns = None  # Placeholder for initial patterns
+class Policy2310393_2311514_2310273_2311428(Policy):
+    def __init__(self, stock_width = 50, stock_height = 50):
+        self.stock_width = stock_width
+        self.stock_height = stock_height
+        self.initial_cut_patterns = None
         self.required_quantities = None
 
     def get_action(self, observation, info):
         items = observation["products"]
-        stockpile = observation["stocks"]
+        stocks = observation["stocks"]
 
         self._prepare_data_(items)
 
         # Solve with column generation
-        cut_solution = self._process_column_generation_(stockpile)
+        cut_solution = self._process_column_generation_(stocks)
 
         # Choose an action based on the solution
-        move = self._determine_action_(stockpile, cut_solution)
+        move = self._determine_action_(stocks, cut_solution)
         return move
 
     def _prepare_data_(self, items):
         self.required_quantities = np.array([prod["quantity"] for prod in items])
         self.item_dimensions = np.array([prod["size"] for prod in items])
-
-        # Create trivial patterns for initialization
         total_items = len(self.item_dimensions)
-        self.starting_cut_patterns = np.eye(total_items, dtype=int)
+        self.initial_cut_patterns = np.eye(total_items, dtype=int)
 
-    def _process_column_generation_(self, stockpile):
+    def _process_column_generation_(self, stocks):
         is_new_pattern = True
         next_pattern = None
-        active_patterns = self.starting_cut_patterns
+        active_patterns = self.initial_cut_patterns
 
         while is_new_pattern:
             if next_pattern is not None:
                 active_patterns = np.column_stack((active_patterns, next_pattern))
 
-            dual_values = self._solve_lp_relaxation_(active_patterns)
-            is_new_pattern, next_pattern = self._find_new_pattern_(dual_values, stockpile)
+            dual_values = self._solve_lp_problem__(active_patterns)
+            is_new_pattern, next_pattern = self._find_new_pattern_(dual_values, stocks)
 
-        optimal_stock_count, optimal_solution = self._solve_ip_master_(active_patterns)
+        optimal_stock_count, optimal_solution = self._solve_ip_problem_(active_patterns)
         return {"cut_patterns": active_patterns, "minimal_stock": optimal_stock_count, "optimal_numbers": optimal_solution}
 
-    def _solve_lp_relaxation_(self, active_patterns):
+    def _solve_lp_problem__(self, active_patterns):
         num_vars = active_patterns.shape[1]
-
         c = np.ones(num_vars)
-
         A = -active_patterns
         b = -self.required_quantities
-
         bounds = [(0, None) for _ in range(num_vars)]
         res = linprog(c, A_ub=A, b_ub=b, bounds=bounds, method="highs")
 
         if res.success:
-            return res.slack  # Or modify as needed for interpreting dual values
+            return res.slack
         else:
             raise ValueError("Linear programming problem could not be solved.")
 
 
-    def _solve_ip_master_(self, active_patterns):
+    def _solve_ip_problem_(self, active_patterns):
         num_vars = active_patterns.shape[1]
-        
         c = np.ones(num_vars)
         A = -active_patterns
         b = -self.required_quantities
-        
         bounds = [(0, None) for _ in range(num_vars)]
-        
         res = linprog(c, A_ub=A, b_ub=b, bounds=bounds, method="highs")
-        
+
         if res.success:
-            allocation_vars = np.round(res.x).astype(int)  # Round to integers
+            allocation_vars = np.round(res.x).astype(int) # Round to integers
             obj_val = allocation_vars.sum()
             return obj_val, allocation_vars
         else:
             raise ValueError("Integer programming problem could not be solved.")
-    
-    
-    def _find_new_pattern_(self, dual_values, stockpile):
-        num_vars = len(self.item_dimensions)
 
+    def _find_new_pattern_(self, dual_values, stocks):
+        num_vars = len(self.item_dimensions)
         c = dual_values - 1  
         A = [
             self.item_dimensions[:, 0],  
             self.item_dimensions[:, 1]  
         ]
         b = [self.stock_width, self.stock_height]
-        
-
         bounds = [(0, None) for _ in range(num_vars)]
         res = linprog(c, A_ub=A, b_ub=b, bounds=bounds, method="highs")
-        
+
         if res.success:
-            decision_vars = np.round(res.x).astype(int)  # Round to integers
+            decision_vars = np.round(res.x).astype(int) # Round to integers
             obj_val = 1 - dual_values @ decision_vars
             if obj_val < 0:
                 return True, decision_vars
@@ -105,12 +92,11 @@ class Policy2310393(Policy):
                 return False, None
         else:
             raise ValueError("Pattern finding problem could not be solved.")
-    
 
-    def _determine_action_(self, stockpile, cut_solution):
+    def _determine_action_(self, stocks, cut_solution):
         stock_idx = 0
-        while stock_idx < len(stockpile):
-            stock = stockpile[stock_idx]
+        while stock_idx < len(stocks):
+            stock = stocks[stock_idx]
             stock_w, stock_h = self._get_stock_size_(stock)
             for pattern, qty in zip(cut_solution["cut_patterns"].T, cut_solution["optimal_numbers"]):
                 if qty > 0:
