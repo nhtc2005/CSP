@@ -8,6 +8,7 @@ class Policy2310393_2311514_2310273_2311428(Policy):
         self.stock_height = stock_height
         self.initial_cut_patterns = None
         self.required_quantities = None
+        self.rotated_dimensions = None
 
     def get_action(self, observation, info):
         items = observation["products"]
@@ -27,6 +28,7 @@ class Policy2310393_2311514_2310273_2311428(Policy):
         self.item_dimensions = np.array([prod["size"] for prod in items])
         total_items = len(self.item_dimensions)
         self.initial_cut_patterns = np.eye(total_items, dtype=int)
+        self.rotated_dimensions = np.array([[size[1], size[0]] for size in self.item_dimensions])
 
     def _process_column_generation_(self, stocks):
         is_new_pattern = True
@@ -56,7 +58,6 @@ class Policy2310393_2311514_2310273_2311428(Policy):
         else:
             raise ValueError("Linear programming problem could not be solved.")
 
-
     def _solve_ip_problem_(self, active_patterns):
         num_vars = active_patterns.shape[1]
         c = np.ones(num_vars)
@@ -74,10 +75,10 @@ class Policy2310393_2311514_2310273_2311428(Policy):
 
     def _find_new_pattern_(self, dual_values, stocks):
         num_vars = len(self.item_dimensions)
-        c = dual_values - 1  
+        c = dual_values - 1
         A = [
-            self.item_dimensions[:, 0],  
-            self.item_dimensions[:, 1]  
+            np.minimum(self.item_dimensions[:, 0], self.item_dimensions[:, 1]),
+            np.maximum(self.item_dimensions[:, 0], self.item_dimensions[:, 1])
         ]
         b = [self.stock_width, self.stock_height]
         bounds = [(0, None) for _ in range(num_vars)]
@@ -98,15 +99,33 @@ class Policy2310393_2311514_2310273_2311428(Policy):
         while stock_idx < len(stocks):
             stock = stocks[stock_idx]
             stock_w, stock_h = self._get_stock_size_(stock)
+
             for pattern, qty in zip(cut_solution["cut_patterns"].T, cut_solution["optimal_numbers"]):
                 if qty > 0:
                     for prod_idx, prod_count in enumerate(pattern):
                         if prod_count > 0:
                             prod_dim = self.item_dimensions[prod_idx]
+
                             if stock_w >= prod_dim[0] and stock_h >= prod_dim[1]:
                                 for x_pos in range(stock_w - prod_dim[0] + 1):
                                     for y_pos in range(stock_h - prod_dim[1] + 1):
                                         if self._can_place_(stock, (x_pos, y_pos), prod_dim):
-                                            return {"stock_idx": stock_idx, "size": prod_dim, "position": (x_pos, y_pos)}
+                                            return {
+                                                "stock_idx": stock_idx,
+                                                "size": prod_dim,
+                                                "position": (x_pos, y_pos)
+                                            }
+
+                            rotated_dim = [prod_dim[1], prod_dim[0]]
+                            if stock_w >= rotated_dim[0] and stock_h >= rotated_dim[1]:
+                                for x_pos in range(stock_w - rotated_dim[0] + 1):
+                                    for y_pos in range(stock_h - rotated_dim[1] + 1):
+                                        if self._can_place_(stock, (x_pos, y_pos), rotated_dim):
+                                            return {
+                                                "stock_idx": stock_idx,
+                                                "size": rotated_dim,
+                                                "position": (x_pos, y_pos)
+                                            }
             stock_idx += 1
+
         return {"stock_idx": -1, "size": (0, 0), "position": (0, 0)}
