@@ -47,7 +47,7 @@ if __name__ == "__main__":
     observation, info = env.reset(seed=42)
     print(info)
 
-    policy2310393_2311514_2310273_2311428 = Policy2310393_2311514_2310273_2311428()
+    policy2310393_2311514_2310273_2311428 = Policy2310393_2311514_2310273_2311428(1)
     for _ in range(200):
         action = policy2310393_2311514_2310273_2311428.get_action(observation, info)
         observation, reward, terminated, truncated, info = env.step(action)

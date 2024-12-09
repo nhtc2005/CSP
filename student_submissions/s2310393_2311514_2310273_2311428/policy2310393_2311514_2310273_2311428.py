@@ -3,7 +3,8 @@ from scipy.optimize import linprog
 from policy import Policy
 
 class Policy2310393_2311514_2310273_2311428(Policy):
-    def __init__(self, stock_width = 50, stock_height = 50):
+    def __init__(self, stock_width=50, stock_height=50, policy_id=1):
+        self.policy_id = policy_id # policy_id = 1: Bottom Left Fill (BLF), policy_id = 2: Column Generation
         self.stock_width = stock_width
         self.stock_height = stock_height
         self.initial_cut_patterns = None
@@ -11,8 +12,78 @@ class Policy2310393_2311514_2310273_2311428(Policy):
         self.rotated_dimensions = None
 
     def get_action(self, observation, info):
-        items = observation["products"]
+        if self.policy_id == 1:
+            return self._blf_get_action_(observation, info)
+        else:
+            return self._column_generation_get_action_(observation, info)
+
+    def _blf_get_action_(self, observation, info):
+        stocks = sorted(
+            enumerate(observation["stocks"]),
+            key=lambda stock: self._get_stock_size_(stock[1])[0] * self._get_stock_size_(stock[1])[1],
+            reverse=True
+        )
+
+        list_prods = sorted(
+            observation["products"],
+            key=lambda prod: prod["size"][0] * prod["size"][1],
+            reverse=True
+        )
+
+        prod_size = [0, 0]
+        stock_idx = -1
+        pos_x, pos_y = 0, 0
+
+        # Pick a product that has quality > 0
+        for prod in list_prods:
+            if prod["quantity"] > 0:
+                prod_size = prod["size"]
+
+                # Loop through all stocks
+                for i, stock in enumerate(observation["stocks"]):
+                    stock_w, stock_h = self._get_stock_size_(stock)
+                    prod_w, prod_h = prod_size
+
+                    # Iterate to find the bottom-left placement
+                    pos_x, pos_y = None, None
+                    best_x, best_y = None, None
+                    for x in range(stock_w - prod_w + 1):
+                        for y in range(stock_h - prod_h + 1):
+                            if self._can_place_(stock, (x, y), prod_size):
+                                if best_x is None or y > best_y or (y == best_y and x < best_x):
+                                    best_x, best_y = x, y
+
+                    if best_x is not None and best_y is not None:
+                        stock_idx = i
+                        pos_x, pos_y = best_x, best_y
+                        break
+
+                    # Check rotated placement (90 degrees)
+                    if stock_w >= prod_h and stock_h >= prod_w:
+                        best_x, best_y = None, None
+                        for x in range(stock_w - prod_h + 1):
+                            for y in range(stock_h - prod_w + 1):
+                                if self._can_place_(stock, (x, y), prod_size[::-1]):
+                                    if best_x is None or y > best_y or (y == best_y and x < best_x):
+                                        best_x, best_y = x, y
+                        if best_x is not None and best_y is not None:
+                            prod_size = prod_size[::-1]
+                            stock_idx = i
+                            pos_x, pos_y = best_x, best_y
+                            break
+
+                if pos_x is not None and pos_y is not None:
+                    break
+
+        return {"stock_idx": stock_idx, "size": prod_size, "position": (pos_x, pos_y)}
+
+    def _column_generation_get_action_(self, observation, info):
         stocks = observation["stocks"]
+        items = sorted(
+            observation["products"],
+            key=lambda prod: prod["size"][0] * prod["size"][1],
+            reverse=True
+        )
 
         self._prepare_data_(items)
 

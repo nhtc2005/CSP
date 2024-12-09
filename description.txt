@@ -1,27 +1,36 @@
 DESCRIPTION OF OUR POLICY
 
-Our code implements a 2D cutting stock strategy using column generation. The main 
-objective is to minimize material usage while fulfilling the product requirements.
+Our code implements a 2D cutting stock strategy using Bottom-Left Fill (BLF) 
+and column generation. The primary objective is to minimize material usage 
+while meeting product requirements.
 
 Key Features and Components:
 1. __init__:
-    -   Initializes stock_width and stock_height.
-    -   Sets upInitialize initial_cut_patterns (basic patterns) and required_quantities.
+    -   Initialize policy_id.
+    -   Initialize stock_width and stock_height.
+    -   Set up initial_cut_patterns (basic patterns) and required_quantities.
 
 2. get_action:
-    -   Determines the best cutting action based on the current stock and product 
+    -   Determine the best cutting action based on the current stock and product 
         requirements.
     -   Actions include selecting the stock piece and defining the position and 
         size of the cut.
 
-3. Column Generation Workflow:
-    -   Prepares data using _prepare_data_
-    -   Iteratively finds better cutting patterns by:
+3. BLF Workflow:
+    -   Iterate through products sorted by area (largest to smallest).
+    -   For each product, check:
+        + If it fits into the available stocks in its original or rotated orientation.
+        + If yes, find the bottom-left position where it can be placed.
+        + If no position is found, move to the next stock.
+
+4. Column Generation Workflow:
+    -   Prepare data using _prepare_data_
+    -   Iteratively find better cutting patterns by:
         + Solving a linear programming (LP) problem to evaluate existing patterns.
         + Identifying new patterns that can improve the solution.
-    -   Solves the master problem of column generation using _solve_ip_problem.
+    -   Solve the master problem of column generation using _solve_ip_problem.
 
 4. Action determination: _determine_action_
-    -   Selects the stock and cutting position based on the solution.
-    -   Ensures that cuts fit within the stock dimensions and meet the product size 
+    -   Select the stock and cutting position based on the solution.
+    -   Ensure that cuts fit within the stock dimensions and meet the product size 
         requirements.
